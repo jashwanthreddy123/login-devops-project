@@ -1,73 +1,132 @@
-name: Login App CI-CD
+name: Build-Test-Deploy
 
 on:
   push:
     branches:
       - master
 
+
 jobs:
 
-  build-deploy:
+  build-test-deploy:
 
     runs-on: ubuntu-latest
 
     steps:
 
+
     # 1. Checkout code
-    - name: Checkout repository
+    - name: Checkout Code
       uses: actions/checkout@v4
 
 
-    # 2. Login to Docker Hub
+
+    # 2. Build Docker image
+    - name: Build Image
+      run: |
+        docker build \
+        -t ${{ secrets.DOCKER_USERNAME }}/login-app:${{ github.sha }} .
+
+
+
+    # 3. Test container
+    - name: Test Container
+      run: |
+
+        docker run -d \
+        --name login-test \
+        -p 8080:80 \
+        ${{ secrets.DOCKER_USERNAME }}/login-app:${{ github.sha }}
+
+
+        sleep 10
+
+
+        curl -f http://localhost:8080
+
+
+        docker stop login-test
+        docker rm login-test
+
+
+
+
+    # 4. Docker Hub login
     - name: Docker Login
       uses: docker/login-action@v3
+
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
 
 
-    # 3. Build Docker image
-    - name: Build Docker Image
+
+
+    # 5. Push Image
+    - name: Push Image
       run: |
-        docker build -t ${{ secrets.DOCKER_USERNAME }}/login-app:${{ github.sha }} .
+
+        docker push \
+        ${{ secrets.DOCKER_USERNAME }}/login-app:${{ github.sha }}
 
 
-    # 4. Push Docker image
-    - name: Push Docker Image
-      run: |
-        docker push ${{ secrets.DOCKER_USERNAME }}/login-app:${{ github.sha }}
 
 
-    # 5. Deploy to Kubernetes server
-    - name: Deploy Application
+
+
+    # 6. Deploy Kubernetes
+    - name: Deploy To Kubernetes
       uses: appleboy/ssh-action@v1
+
+
       with:
 
         host: ${{ secrets.SERVER_IP }}
-        username: root
+
+        username: ubuntu
+
         key: ${{ secrets.SSH_KEY }}
+
 
         script: |
 
-          echo "Connected to server"
 
-          cd /root/login-devops-project
+          echo "Connected"
+
+
+          cd /home/ubuntu/login-devops-project
+
 
           echo "Pull latest code"
+
           git pull origin master
 
+
+
           echo "Updating image"
+
 
           kubectl set image deployment/login-app \
           login-app=${{ secrets.DOCKER_USERNAME }}/login-app:${{ github.sha }} \
           -n login-app
 
 
+
           echo "Applying Kubernetes files"
+
 
           kubectl apply -f k8s/ -n login-app
 
 
-          echo "Deployment status"
+
+          echo "Rollout status"
+
+
+          kubectl rollout status deployment/login-app -n login-app
+
+
+
+          echo "Pods"
+
 
           kubectl get pods -n login-app
