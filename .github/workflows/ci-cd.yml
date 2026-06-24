@@ -8,78 +8,86 @@ on:
 
 jobs:
 
- build:
+  build:
 
-  runs-on: ubuntu-latest
+    runs-on: ubuntu-latest
 
-  steps:
+    steps:
 
-  - name: Checkout
-    uses: actions/checkout@v4
-
-
-  - name: Login Docker Hub
-    uses: docker/login-action@v3
-    with:
-      username: ${{ secrets.DOCKER_USERNAME }}
-      password: ${{ secrets.DOCKER_PASSWORD }}
+    - name: Checkout
+      uses: actions/checkout@v4
 
 
-  - name: Build Backend
-    run: |
-      docker build -t ${{ secrets.DOCKER_USERNAME }}/login-backend:${{ github.sha }} ./backend
+    - name: Login Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
 
 
-  - name: Build Frontend
-    run: |
-      docker build -t ${{ secrets.DOCKER_USERNAME }}/login-frontend:${{ github.sha }} ./frontend
+    - name: Build Backend
+      run: |
+        docker build \
+        -t ${{ secrets.DOCKER_USERNAME }}/login-backend:${{ github.sha }} \
+        ./backend
 
 
-  - name: Push Images
-    run: |
-
-      docker push \
-      ${{ secrets.DOCKER_USERNAME }}/login-backend:${{ github.sha }}
-
-      docker push \
-      ${{ secrets.DOCKER_USERNAME }}/login-frontend:${{ github.sha }}
+    - name: Build Frontend
+      run: |
+        docker build \
+        -t ${{ secrets.DOCKER_USERNAME }}/login-frontend:${{ github.sha }} \
+        ./frontend
 
 
- deploy:
-
-  needs: build
-
-  runs-on: ubuntu-latest
-
-
-  steps:
-
-  - name: Deploy Kubernetes
-
-    uses: appleboy/ssh-action@v1
-    with:
-
-      host: ${{ secrets.SERVER_IP }}
-      username: ubuntu
-      key: ${{ secrets.SSH_KEY }}
-
-      script: |
-
-        cd login-devops-project
-
-        kubectl set image deployment/backend \
-        backend=${{ secrets.DOCKER_USERNAME }}/login-backend:${{ github.sha }} \
-        -n login-app
+    - name: Push Backend
+      run: |
+        docker push \
+        ${{ secrets.DOCKER_USERNAME }}/login-backend:${{ github.sha }}
 
 
-        kubectl set image deployment/login-app \
-        login-app=${{ secrets.DOCKER_USERNAME }}/login-frontend:${{ github.sha }} \
-        -n login-app
+    - name: Push Frontend
+      run: |
+        docker push \
+        ${{ secrets.DOCKER_USERNAME }}/login-frontend:${{ github.sha }}
 
 
-        kubectl rollout status deployment/backend \
-        -n login-app
+
+  deploy:
+
+    needs: build
+
+    runs-on: ubuntu-latest
 
 
-        kubectl rollout status deployment/login-app \
-        -n login-app
+    steps:
+
+    - name: Deploy Kubernetes
+
+      uses: appleboy/ssh-action@v1
+
+      with:
+
+        host: ${{ secrets.SERVER_IP }}
+        username: ubuntu
+        key: ${{ secrets.SSH_KEY }}
+
+        script: |
+
+          cd ~/login-devops-project
+
+          kubectl set image deployment/backend \
+          backend=${{ secrets.DOCKER_USERNAME }}/login-backend:${{ github.sha }} \
+          -n login-app
+
+
+          kubectl set image deployment/login-app \
+          login-app=${{ secrets.DOCKER_USERNAME }}/login-frontend:${{ github.sha }} \
+          -n login-app
+
+
+          kubectl rollout status deployment/backend \
+          -n login-app
+
+
+          kubectl rollout status deployment/login-app \
+          -n login-app
