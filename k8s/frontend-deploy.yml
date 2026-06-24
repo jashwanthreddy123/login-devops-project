@@ -15,6 +15,6 @@ spec:
     spec:
       containers:
       - name: login-app
-        image: jashwanth0310/login-app:latest
+        image: jashwanth0310/login-app-frontend:latest
         ports:
         - containerPort: 80
